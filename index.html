@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="RepairScan helps you choose the best next life for an item." />
+  <title>RepairScan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header><a class="logo" href="#">Repair<span>Scan</span></a><button class="ghost" id="impactBtn">My impact</button></header>
+<main>
+  <section id="startView" class="view active">
+    <div class="hero"><p class="eyebrow">KEEP USEFUL STUFF OUT OF LANDFILL</p><h1>What should happen to <em>this item?</em></h1><p>Scan a barcode or describe the item. RepairScan asks what works, what does not, and gives you a clear next step.</p></div>
+    <div class="start-card">
+      <h2>Start with an item</h2>
+      <div class="scan-area">
+        <div><h3>Scan a barcode</h3><p>Use your phone camera to identify a packaged item.</p><button class="primary" id="startScan">Open camera</button></div>
+        <div class="or">or</div>
+        <div><label for="barcode">Enter a UPC/EAN barcode</label><div class="input-row"><input id="barcode" inputmode="numeric" placeholder="e.g. 012345678905" /><button class="secondary" id="lookupBtn">Look up</button></div><small id="lookupMessage"></small></div>
+      </div>
+      <div id="cameraBox" class="camera-box hidden"><video id="camera" autoplay playsinline muted></video><button class="danger small" id="stopScan">Stop camera</button><p id="scanStatus">Point the camera at a barcode.</p></div>
+      <div class="divider"><span>or select an item type</span></div>
+      <div id="categoryGrid" class="category-grid"></div>
+    </div>
+  </section>
+
+  <section id="questionsView" class="view">
+    <button class="back" data-back="startView">← Start over</button>
+    <div class="step-title"><p class="eyebrow">STEP 2 OF 3</p><h1 id="itemTitle">Tell us about it</h1><p id="itemSubtitle">Answer a few quick questions for a more useful recommendation.</p></div>
+    <form id="questionForm" class="question-card"></form>
+  </section>
+
+  <section id="resultView" class="view">
+    <button class="back" data-back="startView">← Scan another item</button>
+    <div id="resultContent"></div>
+  </section>
+
+  <section id="impactView" class="view">
+    <button class="back" data-back="startView">← Back</button>
+    <div class="step-title"><p class="eyebrow">YOUR LOCAL DEVICE DATA</p><h1>Your impact</h1><p>Saved in this browser only. Add Firebase later if you want shared community reports.</p></div>
+    <div id="impactContent"></div>
+  </section>
+</main>
+<footer>RepairScan gives practical suggestions, not safety or disposal certification. Check manufacturer and local rules for hazardous waste, batteries, and chemicals.</footer>
+<script src="rules.js"></script><script src="app.js"></script>
+</body>
+</html>
