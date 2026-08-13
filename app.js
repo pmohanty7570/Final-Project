@@ -1,13 +1,173 @@
-const $=s=>document.querySelector(s);let state={title:"",barcode:"",category:"",answers:{}};let stream=null,scanFrame=null;
-function show(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$('#'+id).classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
-function renderCategories(){ $('#categoryGrid').innerHTML=Object.entries(CATEGORIES).map(([id,c])=>`<button class="category" data-category="${id}"><span>${c.icon}</span><b>${c.label}</b><small>${c.examples}</small></button>`).join('');document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>selectCategory(b.dataset.category))}
-function selectCategory(category,title=""){state.category=category;state.title=title||CATEGORIES[category].label;state.answers={};$('#itemTitle').textContent=state.title;$('#itemSubtitle').textContent=`Category: ${CATEGORIES[category].label}. Choose the option that best matches the item.`;renderQuestions();show('questionsView')}
-function renderQuestions(){let c=CATEGORIES[state.category];$('#questionForm').innerHTML=c.questions.map(q=>`<fieldset class="question"><legend>${q.text}</legend><div class="options">${q.options.map(([v,label])=>`<label class="option"><input required type="radio" name="${q.id}" value="${v}"><span>${label}</span></label>`).join('')}</div></fieldset>`).join('')+`<div class="form-actions"><button type="submit" class="primary">See my recommendation →</button></div>`;}
-$('#questionForm').addEventListener('submit',e=>{e.preventDefault();let fd=new FormData(e.target);state.answers=Object.fromEntries(fd.entries());renderResult();show('resultView')});
-function renderResult(){let r=getRecommendation(state.category,state.answers),list=[r.primary,...r.alternatives];$('#resultContent').innerHTML=`<div class="result-card"><p class="result-label">BEST NEXT STEP FOR ${state.title.toUpperCase()}</p><h1>${r.primary}</h1><div class="why"><strong>Why this is recommended:</strong><br>${r.reason}</div><section class="rankings"><h2>Other options to consider</h2>${list.map((x,i)=>`<div class="rank"><span class="rank-num">${i+1}</span><div><strong>${x}</strong><p>${i===0?'Your recommended first choice based on the condition you selected.':'A reasonable backup option if the first choice is not practical.'}</p></div></div>`).join('')}</section><section class="action-box"><h3>What did you decide?</h3><p>Selecting an outcome saves it only in this browser and updates your impact dashboard.</p><div class="options" id="outcomes">${['Repaired','Donated','Sold / gave away','Recycled','Reused / upcycled','Landfill','Still deciding'].map(x=>`<label class="option"><input type="radio" name="outcome" value="${x}"><span>${x}</span></label>`).join('')}</div><textarea id="outcomeNote" placeholder="Optional note: What was wrong? How much did repair cost?"></textarea><div class="save-row"><span id="saveMessage" class="save-message"></span><button class="primary" id="saveOutcome">Save outcome</button></div></section></div>`;$('#saveOutcome').onclick=saveOutcome}
-function saveOutcome(){let chosen=document.querySelector('input[name="outcome"]:checked');if(!chosen){$('#saveMessage').textContent='Choose an outcome first.';return}let scans=JSON.parse(localStorage.getItem('repairscan-scans')||'[]');scans.unshift({title:state.title,category:state.category,recommendation:getRecommendation(state.category,state.answers).primary,outcome:chosen.value,note:$('#outcomeNote').value.trim(),date:new Date().toLocaleDateString()});localStorage.setItem('repairscan-scans',JSON.stringify(scans));$('#saveMessage').textContent='Saved to your impact dashboard.'}
-async function lookupBarcode(code){code=code.trim();if(!code){$('#lookupMessage').textContent='Enter a barcode first.';return}$('#lookupMessage').textContent='Looking up product…';state.barcode=code;let title='',category=null;try{let res=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);let d=await res.json();if(d.status===1){title=d.product.product_name||d.product.product_name_en||'';category='packaging'}}catch(e){}if(!title){try{let res=await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);let d=await res.json();if(d.items?.length){title=d.items[0].title||'';category=inferCategory(`${title} ${d.items[0].category||''}`)}}catch(e){}}if(title){$('#lookupMessage').textContent=`Found: ${title}`;selectCategory(category||'packaging',title)}else{$('#lookupMessage').textContent='We could not identify it. Select an item type below instead.'}}
-async function startCamera(){if(!navigator.mediaDevices?.getUserMedia){$('#lookupMessage').textContent='Camera access is not available here; enter the barcode manually.';return}if(!('BarcodeDetector'in window)){$('#lookupMessage').textContent='Your browser does not support barcode scanning; enter the barcode manually.';return}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});$('#camera').srcObject=stream;$('#cameraBox').classList.remove('hidden');const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});const detect=async()=>{try{let found=await detector.detect($('#camera'));if(found.length){stopCamera();$('#barcode').value=found[0].rawValue;lookupBarcode(found[0].rawValue);return}}catch(e){}scanFrame=requestAnimationFrame(detect)};detect()}catch(e){$('#lookupMessage').textContent='Camera permission was denied or unavailable. Enter the code manually.'}}
-function stopCamera(){if(scanFrame)cancelAnimationFrame(scanFrame);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('#cameraBox').classList.add('hidden')}
-function renderImpact(){let scans=JSON.parse(localStorage.getItem('repairscan-scans')||'[]'),counts={Repaired:0,Donated:0,'Sold / gave away':0,Recycled:0,'Reused / upcycled':0,Landfill:0};scans.forEach(s=>{if(counts[s.outcome]!==undefined)counts[s.outcome]++});let saved=counts.Repaired+counts.Donated+counts['Sold / gave away']+counts.Recycled+counts['Reused / upcycled'];$('#impactContent').innerHTML=`<div class="impact-card"><div class="impact-grid"><div class="metric"><strong>${scans.length}</strong><span>items logged</span></div><div class="metric"><strong>${saved}</strong><span>kept out of landfill</span></div><div class="metric"><strong>${counts.Repaired}</strong><span>items repaired</span></div></div><section class="history"><h2>History</h2>${scans.length?scans.map(s=>`<div class="history-item"><strong>${s.title} — ${s.outcome}</strong><p>${s.recommendation} · ${s.date}${s.note?' · '+s.note:''}</p></div>`).join(''):'<p class="empty">No saved outcomes yet. Scan an item and record what you did.</p>'}</section></div>`}
-$('#lookupBtn').onclick=()=>lookupBarcode($('#barcode').value);$('#barcode').addEventListener('keydown',e=>{if(e.key==='Enter')lookupBarcode(e.target.value)});$('#startScan').onclick=startCamera;$('#stopScan').onclick=stopCamera;$('#impactBtn').onclick=()=>{renderImpact();show('impactView')};document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{stopCamera();show(b.dataset.back)});renderCategories();
+const foods = {
+  bar: {
+    name: "Demo Protein Bar",
+    brand: "FoodFit Sample Foods",
+    calories: 220,
+    protein: 20,
+    carbs: 22,
+    fat: 8,
+    sugar: 2,
+    sodium: 190,
+    ingredients: "Whey protein isolate, peanut butter, soluble corn fiber, chocolate coating, sucralose"
+  },
+
+  cereal: {
+    name: "Demo Frosted Cereal",
+    brand: "FoodFit Sample Foods",
+    calories: 160,
+    protein: 2,
+    carbs: 37,
+    fat: 1,
+    sugar: 14,
+    sodium: 210,
+    ingredients: "Milled corn, sugar, corn syrup, salt, artificial flavor"
+  },
+
+  yogurt: {
+    name: "Demo Greek Yogurt",
+    brand: "FoodFit Sample Foods",
+    calories: 130,
+    protein: 15,
+    carbs: 9,
+    fat: 3,
+    sugar: 7,
+    sodium: 65,
+    ingredients: "Cultured nonfat milk, milk protein concentrate, cane sugar, fruit puree, live active cultures"
+  },
+
+  pb: {
+    name: "Demo Peanut Butter",
+    brand: "FoodFit Sample Foods",
+    calories: 190,
+    protein: 8,
+    carbs: 7,
+    fat: 16,
+    sugar: 3,
+    sodium: 140,
+    ingredients: "Roasted peanuts, sugar, hydrogenated vegetable oil, salt"
+  }
+};
+
+const $ = (id) => document.getElementById(id);
+
+function boxes(items) {
+  return items.map(item =>
+    `<div class="box"><strong>${item[0]}</strong><br>${item[1]}</div>`
+  ).join("");
+}
+
+$("analyze").onclick = () => {
+  const food = foods[$("food").value];
+
+  if (!food) {
+    $("message").textContent = "Choose a demo product first.";
+    return;
+  }
+
+  const goal = document.querySelector('input[name="goal"]:checked').value;
+  const muscle = $("muscle").checked;
+  const sugarGoal = $("sugarGoal").checked;
+  const simple = $("simple").checked;
+  const ingredientText = food.ingredients.toLowerCase();
+
+  let score = 50;
+  const reasons = [];
+  const warnings = [];
+
+  if (muscle) {
+    if (food.protein >= 20) {
+      score += 20;
+      reasons.push("Has 20g or more of protein.");
+    } else if (food.protein >= 10) {
+      score += 10;
+      reasons.push("Has a moderate amount of protein.");
+    } else {
+      score -= 10;
+      reasons.push("Has lower protein for a muscle-building goal.");
+    }
+  }
+
+  if (sugarGoal) {
+    if (food.sugar <= 5) {
+      score += 15;
+      reasons.push("Has lower sugar.");
+    } else if (food.sugar >= 12) {
+      score -= 20;
+      reasons.push("Has higher sugar.");
+      warnings.push("Higher sugar conflicts with your control-sugar goal.");
+    }
+  }
+
+  if (simple && /sucralose|aspartame|acesulfame/.test(ingredientText)) {
+    score -= 12;
+    reasons.push("Contains an artificial sweetener.");
+    warnings.push("Artificial sweetener found.");
+  }
+
+  if (simple && /sodium benzoate|potassium sorbate|\bbha\b|\bbht\b/.test(ingredientText)) {
+    score -= 10;
+    reasons.push("Contains a preservative.");
+    warnings.push("Preservative found.");
+  }
+
+  if (goal === "lose" && food.calories <= 250 && food.protein >= 10) {
+    score += 10;
+    reasons.push("Provides protein without high calories.");
+  }
+
+  if (goal === "gain" && food.calories >= 180) {
+    score += 8;
+    reasons.push("Provides calories that may support weight gain.");
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  const proteinCalories = food.protein * 4;
+  const carbCalories = food.carbs * 4;
+  const fatCalories = food.fat * 9;
+  const totalMacroCalories = proteinCalories + carbCalories + fatCalories;
+
+  const proteinPercent = Math.round(proteinCalories / totalMacroCalories * 100);
+  const carbPercent = Math.round(carbCalories / totalMacroCalories * 100);
+  const fatPercent = Math.round(fatCalories / totalMacroCalories * 100);
+
+  let scoreText = "Less aligned with your goals";
+
+  if (score >= 80) {
+    scoreText = "Good fit for your goals";
+  } else if (score >= 50) {
+    scoreText = "Partial fit for your goals";
+  }
+
+  $("name").textContent = food.name;
+  $("brand").textContent = food.brand;
+  $("score").textContent = `${score}/100`;
+  $("scoreText").textContent = scoreText;
+
+  $("nutrition").innerHTML = boxes([
+    ["Calories", food.calories],
+    ["Protein", `${food.protein}g`],
+    ["Carbohydrates", `${food.carbs}g`],
+    ["Fat", `${food.fat}g`],
+    ["Sugar", `${food.sugar}g`],
+    ["Sodium", `${food.sodium}mg`]
+  ]);
+
+  $("macros").innerHTML = boxes([
+    ["Protein", `${proteinPercent}%`],
+    ["Carbohydrates", `${carbPercent}%`],
+    ["Fat", `${fatPercent}%`]
+  ]);
+
+  $("reasons").innerHTML = reasons.length
+    ? reasons.map(reason => `<li>${reason}</li>`).join("")
+    : "<li>This score uses your selected goals.</li>";
+
+  $("warnings").innerHTML = warnings.length
+    ? warnings.map(warning => `<li class="warning">${warning}</li>`).join("")
+    : "<li>No ingredient conflicts were found.</li>";
+
+  $("ingredients").textContent = food.ingredients;
+  $("message").textContent = "Demo product analyzed.";
+  $("result").hidden = false;
+};
