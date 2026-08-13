@@ -85,14 +85,6 @@ app.js
 foodfit-goal-guide.png
 ```
 
-## How to Run
-
-1. Download or copy all project files into one folder.
-2. Open the folder in Visual Studio Code.
-3. Right-click `index.html`.
-4. Select **Open with Live Server**.
-5. Choose a demo food and click **Analyze Food**.
-
 ## Future Improvements
 
 - Reconnect a reliable food database API.
